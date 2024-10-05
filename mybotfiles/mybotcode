@@ -1,0 +1,181 @@
+from typing import Final
+import requests
+from io import BytesIO
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+
+# Replace with your actual bot token
+TOKEN: Final = '7219036987:AAFRSwJxvHCYTw_GpFUROpg9GngDNDNrn84'
+
+# Google Drive Direct Download Links for PDFs and reference links
+FILE_CACHE = {
+    'unit1': {
+        'files': [
+            ('Python_unit1.pdf', 'https://drive.google.com/uc?id=1ZFZJ2Fm6W4ycFrC0Ve4p6rSzGQAG4m4a&export=download'),
+        ],
+        'reference': 'https://jovian.com/learn/data-analysis-with-python-zero-to-pandas/lesson/lesson-1-introduction-to-programming-with-python'
+    },
+    'unit2': {
+        'files': [
+            ('Python_unit_2.pdf', 'https://drive.google.com/uc?id=1GwF2hzCskShE3qM_3NDt8CilnbUc7alr&export=download')
+        ],
+        'reference': 'https://jovian.com/timothymodel/python-numerical-computing-with-numpy'
+    },
+    'unit3': {
+        'files': [
+            ('Python_unit_3.pdf', 'https://drive.google.com/uc?id=1rZlMR1Ephe8cs1aBr2a5-3NJ07zg0xwn&export=download')
+        ],
+        'reference': 'https://jovian.com/aakashns/python-pandas-data-analysis'
+    },
+    'unit4': {
+        'files': [],  # Leave empty for unit 4
+        'reference': 'https://jovian.com/aakashns/python-pandas-data-analysis'
+    },
+    'unit5': {
+        'files': [],  # Leave empty for unit 5
+        'reference': 'https://jovian.ai/aakashns/python-matplotlib-data-visualization'
+    }
+}
+
+# Google Drive Direct Download Links for function-related PDFs
+FUNCTION_FILES = {
+    'pandas_functions': 'https://drive.google.com/uc?id=13cG9VrHIXOhCXYZUx3X7TpbUTl35qzzP&export=download',
+    'numpy_functions': 'https://drive.google.com/uc?id=19oY_KYK0y_cGxroQ_hwp4olMQPPH8l4G&export=download',
+    'matplotlib_seaborn_functions': 'https://drive.google.com/uc?id=1Z8IJOsOofxstko1n-fW4F9OVndTStwby&export=download'
+}
+
+# Google Drive Direct Download Link for the image
+IMAGE_URL: Final = 'https://drive.google.com/uc?id=16ZptHpWDCjAY2GSGqkxgRuVR3cUUT1ie&export=download'
+
+# Function to download files
+def download_file(url: str) -> BytesIO:
+    response = requests.get(url)
+    response.raise_for_status()  # Raise an error for bad status
+    return BytesIO(response.content)
+
+# Start command: sends a welcome message with an image
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        image_stream = download_file(IMAGE_URL)
+        await update.message.reply_photo(photo=image_stream, caption='Vanakam Da Mapla!')
+        await update.message.reply_text(
+            "Click Menu - 'Help' command to get Python units material.\n"
+            "You can also use other commands like:\n"
+            "/references - to get references for all units\n"
+            "/functions - to get Python library functions like Pandas, Numpy, and Matplotlib."
+        )
+    except Exception as e:
+        print(f"Error sending welcome photo: {e}")
+        await update.message.reply_text('Vanakam Da Mapla!')
+
+# Help command: sends a list of units via buttons
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("Python Unit 1", callback_data='unit1')],
+        [InlineKeyboardButton("Python Unit 2", callback_data='unit2')],
+        [InlineKeyboardButton("Python Unit 3", callback_data='unit3')],
+        [InlineKeyboardButton("Python Unit 4", callback_data='unit4')],
+        [InlineKeyboardButton("Python Unit 5", callback_data='unit5')],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text('Pick your unit you want to read:', reply_markup=reply_markup)
+
+# Callback function to handle button presses for units
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    unit_key = query.data
+    if unit_key in FILE_CACHE:
+        unit_data = FILE_CACHE[unit_key]
+        files = unit_data.get('files', [])
+        reference = unit_data.get('reference')
+
+        if files:
+            for pdf_name, pdf_url in files:
+                try:
+                    file_stream = download_file(pdf_url)
+                    await query.message.reply_document(document=file_stream, filename=pdf_name, caption=f"Here is the material for {unit_key.replace('unit', 'Unit ')}: {pdf_name}")
+                except Exception as e:
+                    print(f"Error sending PDF {pdf_name}: {e}")
+                    await query.message.reply_text(f"Sorry, there was an error sending {pdf_name}.")
+        else:
+            await query.message.reply_text(f"No files available for {unit_key.replace('unit', 'Unit ')}.")
+
+        if reference:
+            await query.message.reply_text(f"Here is the reference link for {unit_key.replace('unit', 'Unit ')}:\n{reference}")
+    else:
+        await query.message.reply_text("Invalid selection. Please choose a valid unit.")
+
+# References command: sends all unit reference links
+async def references_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        message = "Here are the reference links for all units:\n"
+        for unit_key, data in FILE_CACHE.items():
+            reference = data.get('reference', 'No reference available')
+            message += f"\n{unit_key.replace('unit', 'Unit ')}: {reference}"
+        await update.message.reply_text(message)
+    except Exception as e:
+        print(f"Error in references_command: {e}")
+        await update.message.reply_text("Sorry, there was an error processing your request.")
+
+# Functions command: sends buttons for specific Python library functions
+async def functions_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("Pandas Functions", callback_data='pandas_functions')],
+        [InlineKeyboardButton("Numpy Functions", callback_data='numpy_functions')],
+        [InlineKeyboardButton("Matplotlib and Seaborn Functions", callback_data='matplotlib_seaborn_functions')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text('Select a topic to view its functions:', reply_markup=reply_markup)
+
+# Callback function to handle functions buttons and send the file
+async def functions_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    callback_data = query.data
+    download_link = FUNCTION_FILES.get(callback_data)
+
+    if download_link:  # Download and send the file
+        try:
+            file_stream = download_file(download_link)
+            await query.message.reply_document(document=file_stream, filename=f"{callback_data.replace('_', ' ').capitalize()}.pdf")
+        except Exception as e:
+            print(f"Error sending file for {callback_data}: {e}")
+            await query.message.reply_text(f"Sorry, there was an error sending the file for {callback_data.replace('_', ' ')}.")
+    else:
+        await query.message.reply_text(f"File not found for {callback_data.replace('_', ' ')}.")
+
+# Function to handle normal text messages
+def handle_response(text: str):
+    process: str = text.lower()
+    if 'hi' in process:
+        return 'Hello, Welcome to my Bot \n use default commands \n Thank You !! .'
+    return 'Sorry, I don\'t understand that.'
+
+# Message handler for non-command text messages
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    response = handle_response(text)
+    await update.message.reply_text(response)
+
+# Main function to set up the bot
+if __name__ == '__main__':
+    app = Application.builder().token(TOKEN).build()
+
+    # Add handlers for commands
+    app.add_handler(CommandHandler('start', start_command))
+    app.add_handler(CommandHandler('help', help_command))
+    app.add_handler(CommandHandler('references', references_command))
+    app.add_handler(CommandHandler('functions', functions_command))
+
+    # Add handler for button presses (unit selection and function buttons)
+    app.add_handler(CallbackQueryHandler(button_callback, pattern=r'^unit[1-5]$'))
+    app.add_handler(CallbackQueryHandler(functions_callback, pattern=r'^(pandas_functions|numpy_functions|matplotlib_seaborn_functions)$'))
+
+    # Add handler for text messages
+    app.add_handler(MessageHandler(filters.TEXT, handle_message))
+
+    print("Bot is running...")
+    app.run_polling(poll_interval=0)
